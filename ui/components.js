@@ -46,6 +46,8 @@ const PATHS = {
   trash: '<path d="M3 4.6h10M6.4 4.6V3h3.2v1.6M4.6 4.6l.6 8.4h5.6l.6-8.4"/>',
   pause: '<path d="M5.6 3.5v9M10.4 3.5v9"/>',
   play: '<path d="M5.4 3.6v8.8L12.4 8z" fill="currentColor"/>',
+  star: '<path d="M8 2.6l1.9 3.9 4.3.6-3.1 3 .7 4.3L8 12.4l-3.8 2 .7-4.3-3.1-3 4.3-.6z"/>',
+  github: '<path fill="currentColor" stroke="none" fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>',
 };
 
 export function icon(name, size = 16) {
@@ -357,7 +359,7 @@ export function createThumb(item, opts) {
       return;
     }
     if (item.posterUrl && await showImage(item.posterUrl)) return;
-    if (opts.favicon) await showImage(opts.favicon, 'is-favicon', false);
+    if (opts.favicon && !el.querySelector('.is-favicon')) await showImage(opts.favicon, 'is-favicon', false);
   };
 
   /** Build a muted player for a URL. Always release it with destroy(). */
@@ -404,6 +406,9 @@ export function createThumb(item, opts) {
   const captureFrame = () => new Promise((resolve) => {
     const p = makePlayer(opts.frameUrl, item.type);
     const v = p.video;
+    // A detached video element often never loads in Chrome. Keep it in the
+    // card, invisible, until the snapshot is taken or the capture times out.
+    el.append(v);
     let done = false;
     const finish = (ok) => {
       if (done) return;
@@ -433,16 +438,25 @@ export function createThumb(item, opts) {
   });
 
   const frameCandidate = item.kind === 'video' && !item.drm && !item.live && !!opts.frameUrl;
-  const begin = () => {
+  const begin = async () => {
     if (destroyed) return;
+    // Poster first. It is one cheap image, it appears instantly, and it
+    // avoids starting a full video player for every card. Frame capture
+    // only runs when there is no poster at all.
+    if (item.kind !== 'image' && item.posterUrl) {
+      if (await showImage(item.posterUrl)) return;
+    }
     if (frameCandidate) {
+      // Show the site icon right away so the card is never blank while the
+      // frame is being captured. The frame canvas covers it on success.
+      if (opts.favicon && !el.querySelector('.is-favicon')) showImage(opts.favicon, 'is-favicon', false).catch(() => {});
       frameQueue.push(async () => {
         if (destroyed) return;
         if (!await captureFrame() && !destroyed) await fallbackChain();
       });
       pumpFrames();
     } else {
-      fallbackChain();
+      await fallbackChain();
     }
   };
 
