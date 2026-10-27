@@ -530,10 +530,9 @@ function renderSettings() {
   let showAll = !!prefs.showAllImages;
 
   const field = (label, ...kids) => h('div', { class: 'field' }, h('label', { class: 'field-label' }, label), ...kids);
+  // The version is its own footer, pinned to the bottom of the extension
+  // window, not merged with any other text or button.
   const footer = h('div', { class: 'settings-footer' },
-    h('div', { class: 'settings-actions' },
-      h('button', { class: 'btn primary', type: 'button', onclick: () => openRepo('') }, icon('github', 14), icon('star', 14), 'Star on GitHub'),
-      h('button', { class: 'btn ghost', type: 'button', onclick: () => openRepo('/issues') }, icon('github', 14), 'Report an issue')),
     h('p', { class: 'version' }, `ZVLZ OmniFetch ${extVersion()}`));
   ui.content.replaceChildren(h('div', { class: 'settings' },
     field('File name', tpl, h('div', { class: 'chips' }, tokens), h('div', { class: 'preview-wrap' }, h('span', { class: 'eyebrow' }, 'Preview'), prev)),
@@ -541,8 +540,12 @@ function renderSettings() {
     h('div', { class: 'field row' }, h('div', {}, h('div', { class: 'field-label' }, 'Show small images'), h('p', { class: 'hint' }, 'Include icons and tiny pictures in the Images tab.')), Switch({ checked: showAll, label: 'Show small images', onChange: (v) => (showAll = v) })),
     h('div', { class: 'settings-actions' },
       h('button', { class: 'btn primary', type: 'button', onclick: async () => { await send('prefs:set', { patch: { template: tpl.value, audioLang: lang.value, showAllImages: showAll } }); toast('Settings saved'); } }, 'Save'),
-      h('button', { class: 'btn ghost', type: 'button', onclick: async () => { const r = await send('staging:clear'); if (r.ok !== false) toast('Temporary files cleared'); } }, 'Clear temporary files'))),
-    footer);
+      h('button', { class: 'btn ghost', type: 'button', onclick: async () => { const r = await send('staging:clear'); if (r.ok !== false) toast('Temporary files cleared'); } }, 'Clear temporary files')),
+    field('Support the developer',
+      h('div', { class: 'settings-actions' },
+        h('button', { class: 'btn primary', type: 'button', onclick: () => openRepo('') }, icon('github', 14), icon('star', 14), 'Star on GitHub'),
+        h('button', { class: 'btn ghost', type: 'button', onclick: () => openRepo('/issues') }, icon('github', 14), 'Report an issue')))));
+  root.append(footer);
   ui.scroll.refresh();
 }
 

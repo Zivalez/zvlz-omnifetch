@@ -203,8 +203,7 @@ button { cursor: pointer; }
 .preview { font-size: 12.5px; overflow-wrap: anywhere; }
 .eyebrow { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); font-weight: 600; }
 .settings-actions { display: flex; gap: 8px; align-items: center; }
-.settings-footer { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 20px 0 6px; text-align: center; }
-.settings-footer .settings-actions { justify-content: center; }
+.settings-footer { display: flex; justify-content: center; padding: 10px 14px 12px; text-align: center; flex: none; border-top: 1px solid var(--line); }
 .settings-footer .version { font-size: 11px; color: var(--mut); margin: 0; }
 
 .switch { position: relative; width: 38px; height: 22px; border-radius: 11px; border: 0; background: var(--s3); flex: none; transition: background 0.15s; }
