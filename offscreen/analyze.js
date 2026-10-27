@@ -90,7 +90,7 @@ export async function analyze({ candidates, page, prefs }) {
   let index = 0;
 
   /* ---------- HLS ---------- */
-  const hlsManifests = cap(manifests.filter((m) => manifestKind(m.url, m.contentType) === 'hls'), 5);
+  const hlsManifests = manifests.filter((m) => manifestKind(m.url, m.contentType) === 'hls');
   for (const man of hlsManifests) {
     try {
       const text = await getText(man.url);
@@ -99,14 +99,14 @@ export async function analyze({ candidates, page, prefs }) {
       const playlists = new Map();
       const audioGroups = new Map();
       if (parsed.isMaster) {
-        const variants = cap(parsed.master.variants, 8);
+        const variants = parsed.master.variants;
         const texts = await pmap(variants, 6, async (v) => ({ v, text: await getText(v.uri) }));
         for (const r of texts) {
           if (r?.__err || !r?.text) continue;
           const p = parseM3u8(r.text, r.v.uri);
           playlists.set(canonKey(r.v.uri), p);
         }
-        const rends = cap(parsed.master.media.filter((m) => m.type === 'AUDIO' && m.uri), 6);
+        const rends = parsed.master.media.filter((m) => m.type === 'AUDIO' && m.uri);
         const rtexts = await pmap(rends, 4, async (r) => ({ r, text: await getText(r.uri) }));
         for (const q of rtexts) {
           if (q?.__err || !q?.text) continue;
@@ -127,7 +127,7 @@ export async function analyze({ candidates, page, prefs }) {
       const gate = gateHls({ master: parsed.isMaster ? parsed.master : null, playlists, audioGroups, mediaPlaylistUrl: parsed.isMaster ? null : man.url, pageMeta: page, prefs, keyResults });
       const domVideo = dom.find((d) => (d.kind === 'video') && d.meta?.blob);
       const item = streamItem(man.url, 'hls', page, gate.variants, {}, index++, {
-        poster: domVideo?.meta?.poster || page?.ogImage || null,
+        poster: resolveUrl(page?.url, domVideo?.meta?.poster || page?.ogImage) || null,
         duration: gate.variants.find((v) => v.duration)?.duration || null,
         titleHint: domVideo?.meta?.titleHint || null,
         segmentCount: gate.variants.find((v) => v.segmentCount)?.segmentCount || null,
@@ -142,7 +142,7 @@ export async function analyze({ candidates, page, prefs }) {
   }
 
   /* ---------- DASH ---------- */
-  const dashManifests = cap(manifests.filter((m) => manifestKind(m.url, m.contentType) === 'dash'), 4);
+  const dashManifests = manifests.filter((m) => manifestKind(m.url, m.contentType) === 'dash');
   for (const man of dashManifests) {
     try {
       const text = await getText(man.url);
@@ -154,7 +154,7 @@ export async function analyze({ candidates, page, prefs }) {
       const jobs = [];
       for (const period of mpd.periods) {
         for (const as of period.adaptationSets) {
-          const reps = as.contentType === 'video' ? cap([...as.representations].sort((a, b) => b.bandwidth - a.bandwidth), 6) : as.representations;
+          const reps = as.contentType === 'video' ? [...as.representations].sort((a, b) => b.bandwidth - a.bandwidth) : as.representations;
           for (const rep of reps) {
             const key = `${period.id || 0}:${as.id || 0}:${rep.id}`;
             rep._key = key;
@@ -172,7 +172,7 @@ export async function analyze({ candidates, page, prefs }) {
       const gate = gateDash({ mpd, sidx: sidxMap, pageMeta: page, prefs });
       const domVideo = dom.find((d) => d.kind === 'video' && d.meta?.blob);
       const item = streamItem(man.url, 'dash', page, gate.variants, {}, index++, {
-        poster: domVideo?.meta?.poster || page?.ogImage || null,
+        poster: resolveUrl(page?.url, domVideo?.meta?.poster || page?.ogImage) || null,
         duration: mpd.mediaDuration,
         titleHint: domVideo?.meta?.titleHint || null,
       });
@@ -191,10 +191,7 @@ export async function analyze({ candidates, page, prefs }) {
   }
 
   /* ---------- progressive ---------- */
-  // Progressive items were silently cut at 8, so a page with more files
-  // looked stuck at 8 items. 40 keeps analysis bounded (cheap 64 KB peeks,
-  // 4 workers) while matching the scale images already allow (80).
-  const probes = cap(mediaUrls, 40);
+  const probes = mediaUrls;
   const probeResults = await pmap(probes, 4, async (m) => ({ m, probe: await cachedProbe(m.url) }));
   for (const r of probeResults) {
     if (!r || r.__err || !r.probe) continue;
@@ -215,7 +212,7 @@ export async function analyze({ candidates, page, prefs }) {
       kind: audioOnly ? 'audio' : 'video',
       type: 'progressive',
       title: domMatch?.meta?.titleHint || page?.title || hostLabel(m.url),
-      posterUrl: domMatch?.meta?.poster || null,
+      posterUrl: resolveUrl(page?.url, domMatch?.meta?.poster) || null,
       faviconUrl: page?.favicon || null,
       duration: probe.duration || domMatch?.meta?.duration || null,
       width: probe.width || domMatch?.meta?.width || null,
@@ -235,7 +232,7 @@ export async function analyze({ candidates, page, prefs }) {
   }
 
   /* ---------- images ---------- */
-  const imageList = cap(images, 80);
+  const imageList = images;
   const imgEntries = [];
   for (const img of imageList) {
     if (img.url.startsWith('data:')) {
@@ -512,7 +509,7 @@ function youtubeItem(formats, page, prefs, index) {
     return {
       item: {
         id: `item:yt:${hashId(page?.url || 'yt')}`, kind: 'video', type: 'youtube',
-        title: page?.title || 'YouTube', posterUrl: page?.ogImage || null, faviconUrl: page?.favicon || null,
+        title: page?.title || 'YouTube', posterUrl: resolveUrl(page?.url, page?.ogImage) || null, faviconUrl: page?.favicon || null,
         duration: (formats[0]?.durationMs || 0) / 1000 || null, variants: [], defaultVariantId: null,
         status: 'NOT_READY', notReadyReason: 'signature_required', subtitles: [], live: false, drm: false, index, manifestUrl: page?.url || null,
       },
@@ -525,7 +522,7 @@ function youtubeItem(formats, page, prefs, index) {
   return {
     item: {
       id: `item:yt:${hashId(page?.url || 'yt')}`, kind: 'video', type: 'youtube',
-      title: page?.title || 'YouTube', posterUrl: page?.ogImage || null, faviconUrl: page?.favicon || null,
+      title: page?.title || 'YouTube', posterUrl: resolveUrl(page?.url, page?.ogImage) || null, faviconUrl: page?.favicon || null,
       duration: variants[0]?.duration || null, width: variants[0]?.width || null, height: variants[0]?.resolution || null,
       segmentCount: null, audioLang: null, variants, defaultVariantId: variants.find((v) => v.eligible && !v.audioOnly)?.id || variants[0].id,
       status: 'READY', notReadyReason: null, subtitles: [], live: false, drm: false, index, manifestUrl: page?.url || null,

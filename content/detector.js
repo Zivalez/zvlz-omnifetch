@@ -11,18 +11,24 @@
   let pending = null;
   let flushTimer = null;
   const sentUrls = new Set();
+  const sentPoster = new Map();
 
   const runtime = () => (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id ? chrome.runtime : null);
 
   function pageMeta() {
     if (!isTop) return null;
     const iconLink = document.querySelector('link[rel~="icon"], link[rel~="shortcut"][rel~="icon"], link[rel="apple-touch-icon"]');
-    const og = (name) => document.querySelector(`meta[property="${name}"], meta[name="${name}"]`)?.content || null;
+    const og = (name) => {
+      const c = document.querySelector(`meta[property="${name}"], meta[name="${name}"]`)?.content || null;
+      if (!c) return null;
+      try { return new URL(c, location.href).href; } catch { return c; }
+    };
+    const imgSrcLink = document.querySelector('link[rel="image_src"]')?.getAttribute('href') || null;
     return {
       title: document.title || null,
       url: location.href,
       favicon: iconLink ? new URL(iconLink.getAttribute('href'), location.href).href : `${location.origin}/favicon.ico`,
-      ogImage: og('og:image'),
+      ogImage: og('og:image') || og('twitter:image') || og('twitter:image:src') || (imgSrcLink ? new URL(imgSrcLink, location.href).href : null),
       ogVideo: og('og:video') || og('og:video:url') || og('twitter:player:stream'),
     };
   }
@@ -46,8 +52,16 @@
   function push(list, item) {
     if (!item?.url) return;
     const key = `${item.kind}:${item.url}`;
-    if (sentUrls.has(key)) return;
+    if (sentUrls.has(key)) {
+      // A poster often arrives late (player sets it after load). The old
+      // code dropped the whole item on the second scan, so that poster
+      // never reached the worker. Resend when the poster actually changed.
+      const p = item.meta?.poster || null;
+      if (p && sentPoster.get(key) !== p) { sentPoster.set(key, p); list.push(item); }
+      return;
+    }
     sentUrls.add(key);
+    sentPoster.set(key, item.meta?.poster || null);
     list.push(item);
   }
 
@@ -67,7 +81,13 @@
         kind: el.tagName === 'AUDIO' ? 'audio' : 'video',
         meta: {
           sources,
-          poster: el.poster || null,
+          poster: (() => {
+            const raw = el.poster || el.dataset?.poster || el.getAttribute('data-poster') || null;
+            if (raw) { try { return new URL(raw, location.href).href; } catch { return raw; } }
+            const scope = el.closest('figure, article, section, li, div');
+            const img = scope && scope.querySelector('img');
+            return img ? (img.currentSrc || img.src || null) : null;
+          })(),
           duration: Number.isFinite(el.duration) && el.duration > 0 ? el.duration : null,
           width: el.videoWidth || null,
           height: el.videoHeight || null,

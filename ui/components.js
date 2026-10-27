@@ -320,7 +320,7 @@ export function createThumb(item, opts) {
   const el = h('div', { class: `thumb thumb-${item.kind}` });
   const ph = h('div', { class: 'thumb-ph' }, h('img', { class: 'thumb-appicon', src: opts.appIcon, alt: '' }), icon(item.kind === 'audio' ? 'audio' : item.kind === 'image' ? 'image' : 'video', 14));
   el.append(ph);
-  let destroyed = false, preview = null, ready = false, io = null;
+  let destroyed = false, preview = null, thumbPlayer = null, ready = false, io = null;
 
   /** Draw a media element into a small canvas: keeps only a tiny bitmap, frees decoders and big images. */
   const snapshot = (source, w, hgt, max = 480) => {
@@ -418,13 +418,23 @@ export function createThumb(item, opts) {
       if (ok && !destroyed && v.videoWidth > 0) {
         try { node = snapshot(v, v.videoWidth, v.videoHeight, 480); } catch { node = null; }
       }
-      p.destroy();
       if (node) {
+        p.destroy();
         ready = true;
         el.append(node);
         el.classList.add('has-art', 'has-frame');
+      } else if (ok && !destroyed && v.videoWidth > 0 && v.readyState >= 2) {
+        // Canvas snapshot failed, but the video element itself already
+        // shows the frame. Keep it visible instead of destroying it and
+        // leaving a blank card. This is the fallback the old build relied on.
+        v.classList.add('is-on');
+        ready = true;
+        thumbPlayer = p;
+        el.classList.add('has-art', 'has-frame');
+      } else {
+        p.destroy();
       }
-      resolve(!!node);
+      resolve(!!node || !!thumbPlayer);
     };
     const timer = setTimeout(() => finish(false), 14000);
     p.onFatal = () => finish(false);
@@ -492,6 +502,7 @@ export function createThumb(item, opts) {
       destroyed = true;
       io?.disconnect();
       api.stop();
+      if (thumbPlayer) { thumbPlayer.destroy(); thumbPlayer = null; }
       el.remove();
     },
   };

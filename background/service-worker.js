@@ -283,7 +283,7 @@ function mergeItems(prev, fresh) {
   for (const i of fresh || []) {
     seen.add(i.id);
     const p = old.get(i.id);
-    if (p) out.push({ ...i, title: p.title, posterUrl: p.posterUrl || i.posterUrl, index: p.index, firstSeen: p.firstSeen });
+    if (p) out.push({ ...i, title: p.title, posterUrl: i.posterUrl || p.posterUrl, index: p.index, firstSeen: p.firstSeen });
     else added.push(i);
   }
   for (const p of prev || []) if (!seen.has(p.id)) out.push(p);
@@ -302,15 +302,21 @@ async function addCandidates(tabId, list, source, page = null) {
   const cur = (await getTabCache(tabId)) || emptyCache(tabId);
   const bucket = { ...cur.candidates };
   const arr = [...(bucket[source] || [])];
-  const seen = new Set(arr.map((c) => canonKey(c.url)));
+  const seen = new Map(arr.map((c, idx) => [canonKey(c.url), idx]));
   for (const c of list) {
     if (!c?.url) continue;
     const k = canonKey(c.url);
-    if (seen.has(k)) continue;
-    seen.add(k);
+    if (seen.has(k)) {
+      // Same URL, new metadata (usually a late poster). Update it instead
+      // of dropping it, otherwise the poster never reaches the UI.
+      const ex = arr[seen.get(k)];
+      if (c.meta?.poster && ex.meta?.poster !== c.meta.poster) ex.meta = { ...ex.meta, ...c.meta };
+      continue;
+    }
+    seen.set(k, arr.length);
     arr.push({ ...c, url: c.url, kind: c.kind || 'url', ts: Date.now(), meta: c.meta || {} });
   }
-  bucket[source] = arr.slice(-400);
+  bucket[source] = arr;
   const patch = { candidates: bucket };
   if (page) patch.page = { ...cur.page, ...page };
   await patchTabCache(tabId, patch);

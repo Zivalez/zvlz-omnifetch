@@ -153,7 +153,7 @@ button { cursor: pointer; }
 .card-audio .thumb-appicon { width: 24px; height: 24px; }
 .thumb.has-art .thumb-ph { display: none; }
 .thumb-img, .thumb-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #000; }
-.thumb-img.is-favicon { inset: 50% auto auto 50%; width: 30px; height: 30px; transform: translate(-50%, -50%); object-fit: contain; background: none; border-radius: 6px; }
+.thumb-img.is-favicon { inset: 50% auto auto 50%; width: 48px; height: 48px; transform: translate(-50%, -50%); object-fit: contain; background: none; border-radius: 6px; }
 .thumb.thumb-audio .thumb-img.is-favicon, .thumb-audio .thumb-img { background: var(--s3); }
 .card-image .thumb-img { object-fit: contain; background: #1a1e22; }
 .pill { position: absolute; top: 6px; left: 6px; display: inline-flex; align-items: center; gap: 4px; height: 18px; padding: 0 6px; border-radius: 6px; background: rgba(8, 10, 12, 0.78); color: var(--text); font-size: 10px; font-weight: 700; letter-spacing: 0.05em; z-index: 1; }
