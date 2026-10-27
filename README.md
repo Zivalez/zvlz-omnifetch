@@ -1,7 +1,7 @@
 <h1 align="center">ZVLZ OmniFetch</h1>
 
 <p align="center">
-  <img src="icons/icon128.png" alt="ZVLZ OmniFetch icon" width="128" height="128">
+  <img src="icons/icon48.png" alt="ZVLZ OmniFetch icon" width="128" height="128">
 </p>
 
 <p align="center">
