@@ -538,8 +538,7 @@ function renderSettings() {
       h('button', { class: 'btn primary', type: 'button', onclick: async () => { await send('prefs:set', { patch: { template: tpl.value, audioLang: lang.value, showAllImages: showAll } }); toast('Settings saved'); } }, 'Save'),
       h('button', { class: 'btn ghost', type: 'button', onclick: async () => { const r = await send('staging:clear'); if (r.ok !== false) toast('Temporary files cleared'); } }, 'Clear temporary files')),
     field('About',
-      h('p', { class: 'hint' }, `ZVLZ OmniFetch ${extVersion()} by Zivalez.`),
-      h('p', { class: 'hint' }, 'If this extension helps you, star it on GitHub to help it grow.'),
+      h('p', { class: 'hint' }, `ZVLZ OmniFetch ${extVersion()}`),
       h('div', { class: 'settings-actions' },
         h('button', { class: 'btn primary', type: 'button', onclick: () => openRepo('') }, 'Star on GitHub'),
         h('button', { class: 'btn ghost', type: 'button', onclick: () => openRepo('/issues') }, 'Report an issue')))));
