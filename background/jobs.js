@@ -49,7 +49,7 @@ export async function applyHeaderRule(key, pageUrl, source) {
         condition: {
           requestDomains: hosts,
           initiatorDomains: [chrome.runtime.id],
-          resourceTypes: ['xmlhttprequest', 'media', 'other'],
+          resourceTypes: ['xmlhttprequest', 'media', 'image', 'other'],
         },
       }],
     });

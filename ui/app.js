@@ -150,6 +150,8 @@ function showDetails(i) {
 
 function getThumb(i) {
   let t = thumbs.get(i.id);
+  // Poster that arrives after the first render replaces the old thumbnail.
+  if (t && i.posterUrl && t.posterUrl !== i.posterUrl) { t.destroy(); thumbs.delete(i.id); t = null; }
   if (!t) {
     const url = i.type === 'progressive' ? i.manifestUrl : i.manifestUrl || chosen(i)?.manifestUrl;
     t = createThumb(i, { favicon: faviconUrl(), appIcon: APP_ICON, frameUrl: i.kind === 'video' ? url : null });

@@ -317,7 +317,7 @@ const canHover = matchMedia('(hover: hover)').matches;
  * opts: {favicon, appIcon, frameUrl}
  */
 export function createThumb(item, opts) {
-  const el = h('div', { class: `thumb thumb-${item.kind}` });
+  const el = h('div', { class: `thumb thumb-k-${item.kind}` });
   const ph = h('div', { class: 'thumb-ph' }, h('img', { class: 'thumb-appicon', src: opts.appIcon, alt: '' }), icon(item.kind === 'audio' ? 'audio' : item.kind === 'image' ? 'image' : 'video', 14));
   el.append(ph);
   let destroyed = false, preview = null, thumbPlayer = null, ready = false, io = null;
@@ -481,6 +481,7 @@ export function createThumb(item, opts) {
 
   const api = {
     el,
+    posterUrl: item.posterUrl || null,
     canPreview: () => ready && canHover && !reduceMotion,
     /** Hover preview: a short-lived player on top of the snapshot. */
     play() {

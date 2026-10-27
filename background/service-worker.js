@@ -336,7 +336,7 @@ async function runAnalysis(tabId, { force = false } = {}) {
   try {
     const prefs = await getPrefs();
     await ensureOffscreen();
-    await applyHeaderRule(`analyze:${tabId}`, cache.page?.url, cache.candidates);
+    await applyHeaderRule(`analyze:${tabId}`, cache.page?.url, { candidates: cache.candidates, og: cache.page?.ogImage, posters: (cache.items || []).map((i) => i.posterUrl) });
     const res = await offscreen({ t: 'analyze', tabId, candidates: cache.candidates, page: cache.page, prefs }, 90_000);
     const inventories = res?.inventories || {};
     for (const [variantId, inv] of Object.entries(inventories)) await setInventory(tabId, variantId, inv);
