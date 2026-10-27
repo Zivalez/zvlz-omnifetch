@@ -12,7 +12,7 @@
   <img src="https://img.shields.io/badge/Manifest-V3-4285F4?style=flat-square" alt="Manifest V3">
   <img src="https://img.shields.io/badge/Chrome-120%2B-4285F4?style=flat-square" alt="Chrome 120 plus">
   <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="MIT License">
-  <img src="https://img.shields.io/badge/Version-0.1.0-blue?style=flat-square" alt="Version 0.1.0">
+  <img src="https://img.shields.io/badge/Version-0.2.0-blue?style=flat-square" alt="Version 0.1.0">
 </p>
 
 ## Install
@@ -29,7 +29,6 @@
    git clone https://github.com/Zivalez/zvlz-omnifetch.git
    ```
 
-   The ZIP above is the same file as Code > Download ZIP in this repository.
 2. Open `chrome://extensions` in Chrome 120 or later.
 3. Turn on **Developer mode**.
 4. Choose **Load unpacked**, then select the folder that contains `manifest.json`. If you used the ZIP, that folder is `zvlz-omnifetch-main`.
