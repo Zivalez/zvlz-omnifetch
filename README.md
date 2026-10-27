@@ -63,6 +63,16 @@ npm test
 
 The code is organized into `background`, `content`, `engine`, `offscreen`, and `ui`. Icons are in `icons`.
 
+## FAQ
+
+**Why does an audio or video not appear until I play it?**
+
+The extension can only see media the page has actually requested. If the page has not requested it yet, there is nothing to find. Play it once, then it appears in the list.
+
+**Why is a thumbnail blank?**
+
+A thumbnail comes from the video poster, or from the first frame of the video. If the page has no poster and the first frame cannot be captured, the card shows the site icon instead.
+
 ## License
 
 MIT. Created by Zivalez.
