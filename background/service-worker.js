@@ -1,6 +1,6 @@
 /*
- * Service worker: ORKESTRATOR saja (Bab 4).
- * Tanpa DOM, tanpa createObjectURL; pekerjaan berat di offscreen document.
+ * Service worker: ORCHESTRATOR only (Chapter 4).
+ * No DOM, no createObjectURL; heavy work lives in the offscreen document.
  */
 import { isActiveTab, refreshActiveTab, active } from './active-tab.js';
 import {
@@ -31,11 +31,11 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     const jobs = await getJobs();
     const running = Object.values(jobs).some((j) => j.status === 'running' || j.status === 'saving');
     if (!running) { await ensureKeepalive(false); return; }
-    try { await ensureOffscreen(); await offscreen({ t: 'ping' }, 3000); } catch { /* worker akan bangun lagi di event berikutnya */ }
+    try { await ensureOffscreen(); await offscreen({ t: 'ping' }, 3000); } catch { /* the worker will wake again on the next event */ }
   }
 });
 
-/* ---------- cakupan tab aktif ---------- */
+/* ---------- active tab scope ---------- */
 chrome.tabs.onActivated.addListener(async () => { await refreshActiveTab(); broadcast(); });
 chrome.windows.onFocusChanged.addListener(async (wid) => {
   if (wid === chrome.windows.WINDOW_ID_NONE) return;
@@ -86,10 +86,10 @@ function pageMetaFromTab(url, title) {
   };
 }
 
-/* ---------- sensor jaringan (lapis 1) ---------- */
+/* ---------- network sensor (layer 1) ---------- */
 installWebRequest((tabId, list) => { addCandidates(tabId, list, 'net'); });
 
-/* ---------- pesan dari content script (lapis 2 & 3) ---------- */
+/* ---------- messages from content scripts (layers 2 and 3) ---------- */
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.to === 'offscreen' || msg.t === 'state:changed') return false;
   handle(msg, sender).then(sendResponse).catch((e) => sendResponse({ error: String(e?.message || e) }));
@@ -99,11 +99,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 async function handle(msg, sender) {
   const tabId = sender.tab?.id;
 
-  if (msg.to === 'offscreen') return undefined; // bukan untuk worker
+  if (msg.to === 'offscreen') return undefined; // not for the worker
 
   switch (msg.t) {
     case 'detect:dom': {
-      if (tabId == null || !isActiveTab(tabId)) return { ok: false }; // penjaga kedua
+      if (tabId == null || !isActiveTab(tabId)) return { ok: false }; // second guard
       if (sender.tab?.status === 'unloaded') return { ok: false };
       await addCandidates(tabId, msg.items || [], 'dom', msg.page || null);
       return { ok: true };
@@ -180,7 +180,7 @@ async function handle(msg, sender) {
       }
       if (!entries.length) return { ok: false, error: 'empty' };
       await ensureOffscreen();
-      const fileName = `${applyTemplate('{title} · {date}', { title: cache?.page?.title || 'gambar', date: Date.now() })}.zip`;
+      const fileName = `${applyTemplate('{title} · {date}', { title: cache?.page?.title || 'image', date: Date.now() })}.zip`;
       const res = await offscreen({ t: 'images:zip', entries, zipMode: msg.zipMode || 'zip', fileName });
       if (msg.zipMode === 'zip' && res?.blobUrl) {
         await saveBlobAsJob(res.blobUrl, fileName, res.size, tab, 'zip');
@@ -215,7 +215,7 @@ async function handle(msg, sender) {
       return { ok: true, state: await buildState() };
     }
     case 'staging:clear': {
-      if (Object.values(await getJobs()).some(j => ['running','saving'].includes(j.status))) return { ok:false, error:'Masih ada job aktif. Batalkan atau tunggu sampai selesai.' };
+      if (Object.values(await getJobs()).some(j => ['running','saving'].includes(j.status))) return { ok:false, error:'There are still active jobs. Cancel or wait until finished.' };
       await ensureOffscreen();
       return await offscreen({t:'staging:clear'});
     }
@@ -265,7 +265,7 @@ async function handle(msg, sender) {
   }
 }
 
-/* ---------- agregasi kandidat & analisis ---------- */
+/* ---------- candidate aggregation and analysis ---------- */
 const analyzeTimers = new Map();
 const rerun = new Set();
 
@@ -344,7 +344,7 @@ function requestDomRescan(tabId) {
   try { chrome.tabs.sendMessage(tabId, { t: 'rescan' }, () => { void chrome.runtime.lastError; }); } catch { /* noop */ }
 }
 
-/* ---------- state untuk UI ---------- */
+/* ---------- state for the UI ---------- */
 async function buildState() {
   await refreshActiveTab();
   const tabId = active.tabId;
@@ -374,7 +374,7 @@ function broadcast() {
   chrome.runtime.sendMessage({ t: 'state:changed' }, () => { void chrome.runtime.lastError; });
 }
 
-/* ---------- nama file ---------- */
+/* ---------- file names ---------- */
 function buildFileName(item, variant, mode, cache) {
   const ext = variant.ext || variant.container || 'mp4';
   const ctx = {
@@ -412,7 +412,7 @@ async function saveBlobAsJob(blobUrl, fileName, size, tabId, mode) {
   return id;
 }
 
-/* ---------- menu konteks ---------- */
+/* ---------- context menus ---------- */
 function buildContextMenus() {
   try {
     chrome.contextMenus.removeAll(() => {
@@ -451,6 +451,6 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   }
 });
 
-/* tutup offscreen saat tidak dipakai, biar baik warga */
+/* close the offscreen document when idle, to be a good citizen */
 chrome.alarms.create('idlecheck', { periodInMinutes: 1 });
 chrome.alarms.onAlarm.addListener((a) => { if (a.name === 'idlecheck') closeOffscreenIfIdle(); });

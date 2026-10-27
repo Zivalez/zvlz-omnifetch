@@ -1,4 +1,4 @@
-/* Pembaca box ISO-BMFF secukupnya: verifikasi kepala file, durasi, fragmentasi, dan sidx. */
+/* Minimal ISO-BMFF box reader: verify file header, duration, fragmentation, and sidx. */
 
 export function iterBoxes(u8, start = 0, end = u8.length) {
   const out = [];
@@ -53,7 +53,7 @@ function readMvhdDuration(u8, box) {
   return { timescale, duration: timescale ? duration / timescale : 0 };
 }
 
-/** Info kepala MP4/WebM untuk verifikasi pasca-perakitan (Bab 7). */
+/** MP4/WebM header info for post-assembly verification (Chapter 7). */
 export function mp4Info(u8) {
   const info = { ok: false, container: null, fragmented: false, duration: null, hasMoov: false, hasMdat: false, boxes: [] };
   if (u8.length >= 12 && u8[4] === 0x66 && u8[5] === 0x74 && u8[6] === 0x79 && u8[7] === 0x70) {
@@ -61,7 +61,7 @@ export function mp4Info(u8) {
   } else if (u8[0] === 0x1a && u8[1] === 0x45 && u8[2] === 0xdf && u8[3] === 0xa3) {
     info.container = 'webm';
     info.ok = true;
-    info.hasMoov = true; // padanan EBML header ada
+    info.hasMoov = true; // EBML header equivalent exists
     return info;
   } else {
     return info;
@@ -80,7 +80,7 @@ export function mp4Info(u8) {
   return info;
 }
 
-/** Parse sidx (SegmentBase) -> daftar segmen sebagai rentang byte + durasi. */
+/** Parse sidx (SegmentBase) -> list of segments as byte ranges + durations. */
 export function parseSidx(u8) {
   const box = findBox(u8, ['sidx']) || (() => {
     const top = iterBoxes(u8);

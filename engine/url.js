@@ -1,4 +1,4 @@
-/* Util URL: resolve, kanonisasi, redaksi. Dipakai engine, offscreen, UI, dan test Node. */
+/* URL utilities: resolve, canonicalize, redact. Used by the engine, offscreen, UI, and Node tests. */
 
 const TRACKING_PARAMS = new Set([
   'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
@@ -24,7 +24,7 @@ export function originOf(u) {
   return p ? p.origin : '';
 }
 
-/** URL tanpa query/fragment: untuk log & error (token tidak pernah bocor). */
+/** URL without query/fragment: for logs and errors (tokens never leak). */
 export function redactUrl(u) {
   const p = parseUrl(u);
   if (!p) return String(u).slice(0, 120);
@@ -32,8 +32,8 @@ export function redactUrl(u) {
 }
 
 /**
- * Kanonisasi untuk pengelompokan (dedup). Hanya membuang parameter pelacak
- * yang sudah pasti aman. Parameter auth/token TIDAK pernah dibuang.
+ * Canonicalization for grouping (dedup). Only drops tracking parameters
+ * that are certainly safe. Auth/token parameters are NEVER dropped.
  */
 export function canonKey(u) {
   const p = parseUrl(u);
@@ -71,7 +71,7 @@ export function manifestKind(u, contentType = '') {
   return null;
 }
 
-/** Query string manifest hanya diteruskan bila segmen relatif tidak punya query sendiri. */
+/** A manifest query string is only propagated when a relative segment has no query of its own. */
 export function propagateQuery(manifestUrl, segUrl) {
   const m = parseUrl(manifestUrl), s = parseUrl(segUrl);
   if (!m || !s || s.search) return segUrl;

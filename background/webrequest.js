@@ -1,7 +1,7 @@
 /*
- * Lapis 1: penyadapan request jaringan (observasi saja, MV3).
- * Handler hanya menguji pola lalu mendorong ke antrean; agregasi di-debounce.
- * Event dari tab non-aktif dan tabId -1 langsung dibuang.
+ * Layer 1: network request observation (observe only, MV3).
+ * The handler only tests patterns and then pushes to a queue; aggregation is debounced.
+ * Events from non-active tabs and tabId -1 are discarded immediately.
  */
 import { isActiveTab } from './active-tab.js';
 
@@ -16,7 +16,7 @@ export function installWebRequest(onCandidates) {
 
   const push = (tabId, url, kind, extra = {}) => {
     if (tabId == null || tabId === -1) return;
-    if (!isActiveTab(tabId)) return; // aturan cakupan: hanya tab aktif
+    if (!isActiveTab(tabId)) return; // scope rule: active tab only
     if (!url || url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('chrome')) return;
     if (!queue.has(tabId)) queue.set(tabId, new Map());
     const m = queue.get(tabId);

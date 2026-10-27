@@ -1,4 +1,4 @@
-/* ZIP store-only (tanpa kompresi) untuk unduhan gambar massal. Murni, tanpa dependensi. */
+/* Store-only ZIP (no compression) for bulk image downloads. Pure, no dependencies. */
 
 let CRC_TABLE = null;
 function crcTable() {

@@ -1,6 +1,6 @@
 /*
- * Siklus hidup job unduhan malas (Bab 8): hanya lahir dari klik eksplisit.
- * SW hanya orkestrasi: record job, DNR header per job, chrome.downloads, notifikasi hemat.
+ * Lazy download job lifecycle (Chapter 8): only born from an explicit click.
+ * The service worker only orchestrates: job record, per-job DNR headers, chrome.downloads, frugal notifications.
  */
 import { getJobs, setJob, removeJob, getPrefs, pushHistory, updateHistory } from './store.js';
 import { ensureOffscreen, offscreen } from './offscreen-client.js';
@@ -14,7 +14,7 @@ export async function ensureKeepalive(on) {
   if (!on && has) await chrome.alarms.clear(KEEPALIVE);
 }
 
-/** Semua host yang akan disentuh job/analisis (manifest, segmen, init, kunci). */
+/** All hosts the job/analysis will touch (manifest, segments, init, keys). */
 export function collectHosts(obj) {
   const hosts = new Set();
   const urls = JSON.stringify(obj || {}).match(/https?:\/\/[^"\\\s]+/g) || [];
@@ -23,9 +23,9 @@ export function collectHosts(obj) {
 }
 
 /**
- * Fetch dari konteks ekstensi tidak membawa Referer dan mengirim Origin chrome-extension://,
- * sehingga CDN membalas 403 Forbidden. Rule DNR sesi ini memasang Referer/Origin halaman asal
- * untuk request yang diinisiasi ekstensi ke host media tersebut.
+ * A fetch from the extension context carries no Referer and sends a chrome-extension:// Origin,
+ * so a CDN replies 403 Forbidden. This session DNR rule sets the origin page's Referer/Origin
+ * for extension-initiated requests to those media hosts.
  */
 export async function applyHeaderRule(key, pageUrl, source) {
   try {
@@ -55,7 +55,7 @@ export async function applyHeaderRule(key, pageUrl, source) {
     });
     return id;
   } catch (e) {
-    console.warn('applyHeaderRule gagal', e);
+    console.warn('applyHeaderRule failed', e);
     return null;
   }
 }
@@ -153,7 +153,7 @@ export async function completeJob(jobId, { blobUrl, size, ext }) {
     return;
   }
   await setJob({ id: jobId, downloadId, status: 'running' });
-  // revoke object URL hanya setelah unduhan benar-benar berjalan
+  // revoke the object URL only after the download has actually started
   const listener = (delta) => {
     if (delta.id !== downloadId) return;
     if (delta.state?.current === 'complete' || delta.state?.current === 'interrupted') {
@@ -203,7 +203,7 @@ async function notify(job, ok, reason) {
   const prefs = await getPrefs();
   if (!prefs.notify) return;
   const long = Date.now() - job.startedAt > 60_000;
-  if (ok && !long) return; // hemat: hanya job panjang & kegagalan
+  if (ok && !long) return; // frugal: only long jobs and failures
   try {
     chrome.notifications.create(`md:${job.id}`, {
       type: 'basic',
@@ -215,7 +215,7 @@ async function notify(job, ok, reason) {
   } catch { /* noop */ }
 }
 
-/** Setelah restart browser/ekstensi: job tidak dilanjutkan diam-diam. */
+/** After a browser/extension restart: jobs are not silently resumed. */
 export async function reconcileAfterRestart() {
   const jobs = await getJobs();
   for (const job of Object.values(jobs)) {

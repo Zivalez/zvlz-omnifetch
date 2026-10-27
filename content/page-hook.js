@@ -1,7 +1,7 @@
 /*
- * Lapis 3: hook MAIN world di document_start.
- * Membungkus fetch & XHR, hanya meneruskan METADATA (URL, status, content-type)
- * lewat postMessage. Pembungkus selalu memanggil fungsi asli dan tidak menunda respons.
+ * Layer 3: MAIN world hook at document_start.
+ * Wraps fetch and XHR, only forwarding METADATA (URL, status, content-type)
+ * via postMessage. The wrapper always calls the original function and never delays the response.
  */
 (() => {
   if (window.__mdHook) return;
@@ -29,7 +29,7 @@
             const ct = res.headers ? res.headers.get('content-type') : null;
             const cl = res.headers ? res.headers.get('content-length') : null;
             if (interesting(url, ct)) post({ source: 'net', url, contentType: ct, status: res.status, contentLength: cl ? Number(cl) : null });
-          } catch { /* metadata saja; jangan ganggu playback */ }
+          } catch { /* metadata only; do not disturb playback */ }
         }, () => {});
       }
       return p;
@@ -59,7 +59,7 @@
     };
   }
 
-  // --- navigasi SPA ---
+  // --- SPA navigation ---
   for (const fn of ['pushState', 'replaceState']) {
     const orig = history[fn];
     if (typeof orig === 'function') {
@@ -72,7 +72,7 @@
   }
   window.addEventListener('popstate', () => post({ source: 'nav' }));
 
-  // --- YouTube: baca respons player sebagai metadata format (fitur inti, Bab 13) ---
+  // --- YouTube: read the player response as format metadata (core feature, Chapter 13) ---
   const extract = (resp) => {
     try {
       const sd = resp && resp.streamingData;
@@ -118,7 +118,7 @@
         setTimeout(reportYouTube, 0);
       },
     });
-  } catch { /* halaman mungkin sudah mengunci properti ini */ }
+  } catch { /* the page may already have locked this property */ }
   let tries = 0;
   const poll = setInterval(() => {
     reportYouTube();

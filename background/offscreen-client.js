@@ -1,4 +1,4 @@
-/* Pembuatan & komunikasi offscreen document (satu per profil, alasan resmi). */
+/* Offscreen document creation and communication (one per profile, official reasons). */
 
 let creating = null;
 
@@ -9,7 +9,7 @@ export async function ensureOffscreen() {
     creating = chrome.offscreen.createDocument({
       url: 'offscreen/offscreen.html',
       reasons: ['BLOBS', 'DOM_PARSER', 'WORKERS'],
-      justification: 'Parse manifest, fetch segmen berurutan, dekripsi AES-128, perakitan, dan pembuatan Blob untuk chrome.downloads.',
+      justification: 'Parse manifest, fetch segments in order, decrypt AES-128, assemble, and create Blob for chrome.downloads.',
     }).finally(() => { creating = null; });
   }
   await creating;

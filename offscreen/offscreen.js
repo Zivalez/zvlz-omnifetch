@@ -1,7 +1,7 @@
 /*
- * Offscreen document: mesin pekerja (Bab 4 & 8).
- * Parse playlist, fetch segmen, dekripsi AES-128, transmux/mux, pembuatan Blob.
- * Progres dilaporkan langsung ke UI lewat worker; record job ada di storage.session.
+ * Offscreen document: worker engine (Chapters 4 and 8).
+ * Parses playlists, fetches segments, decrypts AES-128, transmuxes/muxes, builds Blobs.
+ * Progress is reported straight to the UI via the worker; the record job lives in storage.session.
  */
 import { analyze } from './analyze.js';
 import { fetchSegments, fetchRaw, probeProgressive, sleep } from './fetcher.js';
@@ -65,10 +65,10 @@ async function route(msg) {
             const r = await fetchRaw(url, { timeoutMs: 30000 });
             if (!r.ok) continue;
             const sn = sniff(r.bytes);
-            const name = `${sanitize(entry.title || 'gambar')}-${String(i + 1).padStart(2, '0')}.${sn.ext === 'bin' ? 'img' : sn.ext}`;
+            const name = `${sanitize(entry.title || 'image')}-${String(i + 1).padStart(2, '0')}.${sn.ext === 'bin' ? 'img' : sn.ext}`;
             if (msg.zipMode === 'zip') files.push({ name, bytes: r.bytes });
             else files.push({ name, bytes: r.bytes, own: true });
-          } catch { /* lewati yang gagal, jangan gagalkan semuanya tanpa alasan */ }
+          } catch { /* skip the failed ones, do not fail everything for no reason */ }
         }
       }
       if (msg.zipMode === 'zip') {
@@ -119,7 +119,7 @@ function sanitize(s) {
   return String(s || 'media').replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ').trim().slice(0, 80) || 'media';
 }
 
-/* ================= job unduhan malas ================= */
+/* ================= lazy download job ================= */
 async function runJob(msg) {
   const { jobId, prefs } = msg;
   let inv = structuredClone(msg.inv);
@@ -136,20 +136,20 @@ async function runJob(msg) {
   try {
     if (!assemblySupported()) throw Object.assign(new Error('assembly engine unavailable'), { reason: 'codec_unsupported' });
 
-    /* 1. validasi ulang dari manifest segar */
+    /* 1. re-validate from a fresh manifest */
     progress('manifest', 0, 1, 0, null);
     inv = await refreshInventory(inv, headers, job);
 
-    /* 2. cek kelengkapan ulang + kunci sebelum segmen */
+    /* 2. re-check completeness + keys before segments */
     progress('checking', 0, segTotal(inv), 0, inv.totalBytes || null);
     const keyBytes = await ensureKeys(inv, headers, job);
 
-    /* 3. batas jujur extension-only */
+    /* 3. honest extension-only limit */
     const est = estimateBytes(inv);
     const limits = checkLimits(est, prefs.maxAssembleBytes);
     if (!limits.ok) throw Object.assign(new Error('exceeds browser assembly limit'), { reason: limits.reason });
 
-    /* 4. ambil segmen berurutan (fetch paralel terbatas, tulis urut) */
+    /* 4. fetch segments in order (bounded-parallel fetch, sequential writes) */
     const vStaging = inv.video ? new TrackStaging({ memoryLimit: 96e6, name: 'v' }) : null;
     const aStaging = inv.audio ? new TrackStaging({ memoryLimit: 96e6, name: 'a' }) : null;
     if (vStaging) job.stagings.push(vStaging);
@@ -207,7 +207,7 @@ async function runJob(msg) {
       }));
     }
     if (!inv.video && !inv.audio && inv.url) {
-      // file progresif tunggal
+      // single progressive file
       const res = await fetchRaw(inv.url, { headers, signal: job.abort.signal, timeoutMs: 0 });
       if (!res.ok) throw Object.assign(new Error(`HTTP ${res.status}`), { reason: res.status === 403 || res.status === 410 ? 'auth_expired' : 'segment_unavailable' });
       const detected = sniff(res.bytes);
@@ -223,7 +223,7 @@ async function runJob(msg) {
     await Promise.all(runners);
     if (job.canceled) throw Object.assign(new Error('canceled'), { reason: 'canceled' });
 
-    /* 5. rakit sesuai pohon keputusan */
+    /* 5. assemble per the decision tree */
     progress('assembling', total, total, bytesDone, est);
     const container = inv.container || 'mp4';
     let finalBlob = null;
@@ -237,7 +237,7 @@ async function runJob(msg) {
     else if (inv.assembly === 'copy') finalBlob = await copyTrack(aBlob || vBlob, container, { keep: aBlob ? 'audio' : 'video' });
     else finalBlob = vBlob;
 
-    /* 6. verifikasi pasca-perakitan: tidak ada 100% sebelum ini lolos */
+    /* 6. post-assembly verification: no 100% before this passes */
     const ver = (inv.kind === 'image' || inv._singleStaging) ? { ok: finalBlob.size > 0 && !['html','json'].includes(sniff(new Uint8Array(await finalBlob.slice(0,512).arrayBuffer())).kind) } : await verifyBlob(finalBlob, { duration: inv.duration, toleranceSec: inv.toleranceSec || 8, container: finalBlob.type.includes('webm') || container === 'webm' ? 'webm' : 'mp4' });
     if (!ver.ok) throw Object.assign(new Error(ver.detail || 'assembly verification failed'), { reason: ver.reason || 'assembly_unverified' });
 
@@ -245,7 +245,7 @@ async function runJob(msg) {
     send({ t: 'job:done', jobId, blobUrl, size: finalBlob.size, ext: inv._ext || null });
   } catch (e) {
     if (job.canceled || String(e?.message) === 'canceled') {
-      send({ t: 'job:fail', jobId, reason: 'canceled', detail: 'dibatalkan pengguna' });
+      send({ t: 'job:fail', jobId, reason: 'canceled', detail: 'cancelled by user' });
     } else {
       send({ t: 'job:fail', jobId, reason: e?.reason || 'segment_unavailable', detail: String(e?.message || e).slice(0, 200) });
     }
@@ -292,7 +292,7 @@ async function ensureKeys(inv, headers, job) {
   return out;
 }
 
-/** Fetch ulang manifest & bangun inventaris segar; dipakai juga untuk URL rotasi. */
+/** Re-fetch the manifest and build a fresh inventory; also used for URL rotation. */
 async function refreshInventory(inv, headers, job, light = false) {
   if (!inv.manifestUrl || inv.kind === 'progressive' || inv.kind === 'image' || inv.kind === 'youtube') {
     if (inv.url) {
@@ -310,7 +310,7 @@ async function refreshInventory(inv, headers, job, light = false) {
     const text = new TextDecoder().decode(res.bytes);
     if (inv.kind === 'hls') {
       const p = parseM3u8(text, inv.manifestUrl);
-      if (!p.ok || p.isMaster) throw Object.assign(new Error('Manifest berubah'),{reason:'manifest_parse_error'});
+      if (!p.ok || p.isMaster) throw Object.assign(new Error('Manifest changed'),{reason:'manifest_parse_error'});
       if (!p.media.endlist) throw Object.assign(new Error('live_stream'), { reason: 'live_stream' });
       if (p.drm.sampleAes || p.drm.cencKeyFormat) throw Object.assign(new Error('drm_protected'), { reason: 'drm_protected' });
       const fresh = p.media.segments.map((s) => ({
@@ -321,7 +321,7 @@ async function refreshInventory(inv, headers, job, light = false) {
         iv: s.key?.iv || null,
         seq: s.sequence,
       }));
-      if (!fresh.length || fresh.length !== (inv.video?.segments?.length || 0)) throw Object.assign(new Error('Inventaris berubah, deteksi ulang.'),{reason:'segment_list_incomplete'});
+      if (!fresh.length || fresh.length !== (inv.video?.segments?.length || 0)) throw Object.assign(new Error('Inventory changed, re-detect.'),{reason:'segment_list_incomplete'});
       if (fresh.length) {
         inv.video = { ...inv.video, segments: fresh };
         const initSeg = p.media.segments.find((s) => s.init);
@@ -330,7 +330,7 @@ async function refreshInventory(inv, headers, job, light = false) {
       if(inv.audio?.manifestUrl){
         const ar=await fetchRaw(inv.audio.manifestUrl,{headers,signal:job.abort.signal,timeoutMs:15000});
         const ap=ar.ok?parseM3u8(new TextDecoder().decode(ar.bytes),inv.audio.manifestUrl):null;
-        if(!ap?.ok||ap.isMaster||!ap.media.endlist||ap.drm.sampleAes||ap.drm.cencKeyFormat||ap.media.segments.length!==inv.audio.segments.length)throw Object.assign(new Error('Audio berubah'),{reason:'audio_incomplete'});
+        if(!ap?.ok||ap.isMaster||!ap.media.endlist||ap.drm.sampleAes||ap.drm.cencKeyFormat||ap.media.segments.length!==inv.audio.segments.length)throw Object.assign(new Error('Audio changed'),{reason:'audio_incomplete'});
         inv.audio.segments=ap.media.segments.map(s=>({url:s.uri,range:s.byterange?[s.byterange.offset,s.byterange.offset+s.byterange.length-1]:null,duration:s.duration,keyUrl:s.key?.method==='AES-128'?s.key.uri:null,iv:s.key?.iv,seq:s.sequence}));
       }
       return inv;

@@ -1,6 +1,6 @@
 /*
- * Mode Rekam untuk live non-DRM / player tanpa manifest (Bab 8).
- * tabCapture stream -> MediaRecorder di offscreen, selalu berlabel tangkapan parsial.
+ * Record mode for non-DRM live streams / players without a manifest (Chapter 8).
+ * tabCapture stream -> MediaRecorder in the offscreen document, always labeled as a partial capture.
  */
 let rec = null;
 

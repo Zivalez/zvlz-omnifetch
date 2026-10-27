@@ -1,4 +1,4 @@
-/* Cakupan deteksi: hanya tab aktif (Bab 5). */
+/* Detection scope: active tab only (Chapter 5). */
 import { hostOf } from '../engine/url.js';
 
 export const active = { tabId: null, meta: null };

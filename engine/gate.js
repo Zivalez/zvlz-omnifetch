@@ -1,10 +1,10 @@
 /*
- * Completeness gate (Bab 7): state machine + kelayakan + pemasangan + pemeringkatan.
- * Murni dan deterministik; byte media tidak pernah disentuh di sini.
+ * Completeness gate (Chapter 7): state machine + eligibility + pairing + ranking.
+ * Pure and deterministic; media bytes are never touched here.
  *
- * ALUR STATUS:
+ * STATUS FLOW:
  * DETECTED -> PARSING -> INVENTORIED -> VERIFIED -> READY -> DOWNLOADING -> ASSEMBLING -> SAVED
- * NOT_READY (dari mana pun) | FAILED (saat unduhan berjalan)
+ * NOT_READY (from anywhere) | FAILED (while downloading)
  */
 import { canonKey } from './url.js';
 import { codecFamily, isAudioCodec, isVideoCodec, outputContainerFor, audioContainerFor, efficiencyRank, codecLabel } from './codec.js';
@@ -45,10 +45,10 @@ function resolutionLabel(w, h) {
 }
 
 /**
- * Gate HLS.
- * @param master parsed master (boleh null bila halaman langsung memberi media playlist)
+ * HLS gate.
+ * @param master parsed master (may be null when the page directly provides a media playlist)
  * @param playlists Map canonUri -> parsed media playlist
- * @param audioGroups Map canonUri -> parsed media playlist (rendisi audio)
+ * @param audioGroups Map canonUri -> parsed media playlist (audio renditions)
  * @param opts {prefs, keyResults: Map<canonKey,{ok,reason}>}
  */
 export function gateHls({ master, playlists, audioGroups, mediaPlaylistUrl, pageMeta, prefs = {}, keyResults = new Map() }) {
@@ -96,21 +96,21 @@ export function gateHls({ master, playlists, audioGroups, mediaPlaylistUrl, page
     meta.segmentCount = m.segments.length;
     meta.duration = m.durationSum || null;
 
-    // sinyal DRM
+    // DRM signal
     if (parsed.drm.sampleAes || parsed.drm.cencKeyFormat) { meta.reasons.push('drm_protected'); }
     // live
     if (!m.endlist) meta.reasons.push('live_stream');
-    // inventaris penuh
+    // full inventory
     if(m.discontinuities)meta.reasons.push('codec_unsupported');
     if(!variant.codecs || !variant.bandwidth)meta.reasons.push('segment_list_incomplete');
     if (m.segments.length === 0) meta.reasons.push('segment_list_incomplete');
     if (m.hasParts && m.segments.length === 0) meta.reasons.push('segment_list_incomplete');
 
-    // init untuk fMP4
+    // init for fMP4
     const looksFmp4 = m.segments.some((s) => s.init) || /\.m4s(\?|$)/i.test(m.segments[0]?.uri || '') || (variant.codecs || '').includes('avc1') && /\.mp4(\?|$)/i.test(m.segments[0]?.uri || '');
     if (looksFmp4 && m.initUris.length === 0 && m.segments.length > 0) meta.reasons.push('init_missing');
 
-    // codec & kontainer
+    // codec and container
     const codecList = String(variant.codecs || '').split(',').map((s) => s.trim()).filter(Boolean);
     const vCodec = codecList.find(isVideoCodec) || null;
     const aCodec = codecList.find(isAudioCodec) || null;
@@ -118,7 +118,7 @@ export function gateHls({ master, playlists, audioGroups, mediaPlaylistUrl, page
     meta.audioCodec = aCodec;
     meta.muxedAudio = !!aCodec && !variant.audioGroup;
 
-    // pasang audio dari grup AUDIO
+    // pair audio from the AUDIO group
     let audioMeta = null;
     if (variant.audioGroup && master) {
       const rend = master.media.find((mm) => mm.type === 'AUDIO' && mm.groupId === variant.audioGroup && (prefs.audioLang ? (mm.lang || '').toLowerCase().startsWith(prefs.audioLang.toLowerCase()) : mm.isDefault || mm.autoSelect))
@@ -141,7 +141,7 @@ export function gateHls({ master, playlists, audioGroups, mediaPlaylistUrl, page
       }
     }
 
-    // kunci AES-128
+    // AES-128 keys
     const keys = [...new Set(m.segments.map((s) => s.key && s.key.uri).filter(Boolean))];
     for (const k of keys) {
       const res = keyResults.get(canonKey(k));
@@ -170,7 +170,7 @@ export function gateHls({ master, playlists, audioGroups, mediaPlaylistUrl, page
 }
 
 /**
- * Gate DASH.
+ * DASH gate.
  * @param mpd parsed MPD
  * @param sidx Map repKey -> {segments:[{range,duration}], initRange}
  */
@@ -220,9 +220,9 @@ export function gateDash({ mpd, sidx = new Map(), pageMeta, prefs = {} }) {
         finalizeVariant(meta, prefs);
         variants.push(meta);
       }
-      // video-only explicit (wajib berlabel, tidak pernah ditawarkan diam-diam)
+      // explicit video-only (must be labeled, never offered silently)
     }
-    // audio-only berdiri sendiri per Period
+    // audio-only stands alone per Period
     for (const aSet of audioSets) {
       const rep = bestRep(aSet, prefs);
       if (!rep) continue;
@@ -248,7 +248,7 @@ function bestRep(as, prefs) {
 }
 
 function expandRepSegments(rep, period, sidx) {
-  // lazy import loop-free: implementasi ada di mpd.js; di sini terima hasil yang sudah diekspansi
+  // loop-free lazy import: the implementation lives in mpd.js; here accept the already-expanded result
   return rep._expanded || { segments: [], init: null };
 }
 
@@ -315,7 +315,7 @@ function finalizeVariant(meta, prefs) {
 }
 
 function finalize(variants, prefs, pageMeta) {
-  // peringkat: preferensi pengguna -> resolusi -> bitrate gabungan; codec efisien hanya seri pada resolusi sama
+  // ranking: user preferences -> resolution -> combined bitrate; efficient codecs only tie-break at the same resolution
   const eligible = variants.filter((v) => v.eligible);
   eligible.sort((a, b) => {
     if (prefs.maxResolution) {
@@ -334,7 +334,7 @@ function finalize(variants, prefs, pageMeta) {
   return { variants: ranked, defaultVariantId: eligible[0]?.id || null, eligibleCount: eligible.length };
 }
 
-/** Gate file progresif: satu file, verifikasi Content-Length + sniff. */
+/** Progressive file gate: one file, Content-Length + sniff verification. */
 export function gateProgressive({ url, probe, pageMeta, prefs = {} }) {
   const reasons = [];
   const meta = {

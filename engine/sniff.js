@@ -1,4 +1,4 @@
-/* Sniff byte ajaib. Tidak percaya ekstensi URL atau Content-Type saja. */
+/* Magic-byte sniffing. Do not trust the URL extension or Content-Type alone. */
 
 const eq = (b, at, arr) => arr.every((v, i) => b[at + i] === v);
 
@@ -24,7 +24,7 @@ export function sniff(u8) {
   return { kind: 'unknown', ext: 'bin' };
 }
 
-/** Kontainer yang sah untuk disimpan; menolak halaman login / error JSON yang balas 200. */
+/** Containers that are valid to save; rejects login pages / JSON errors that reply 200. */
 export function sniffIsPlayableOrImage(u8) {
   const k = sniff(u8).kind;
   return !['html', 'json'].includes(k);

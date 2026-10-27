@@ -1,6 +1,6 @@
 /*
- * Staging segmen: memori untuk job kecil, OPFS ter-chunk untuk job besar.
- * Penulisan selalu berurutan; tidak ada byte media yang masuk folder Downloads dari sini.
+ * Segment staging: memory for small jobs, chunked OPFS for large jobs.
+ * Writing is always in order; no media bytes enter the Downloads folder from here.
  */
 let opfsRoot = null;
 async function root() {
@@ -76,7 +76,7 @@ export class TrackStaging {
   }
 }
 
-/** Hapus semua berkas staging sisa (fitur privasi: benar-benar menghapus). */
+/** Delete all leftover staging files (privacy feature: truly deletes them). */
 export async function clearAllStaging() {
   const dir = await root();
   if (!dir) return { removed: 0 };

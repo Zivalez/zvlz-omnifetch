@@ -1,8 +1,8 @@
 /*
- * Parser MPEG-DASH (ISO/IEC 23009-1) murni: tanpa DOMParser eksternal supaya
- * bisa diuji di Node dan tetap jalan di offscreen document.
- * Menangani SegmentList, SegmentTemplate (+ SegmentTimeline), SegmentBase (sidx),
- * pewarisan BaseURL di semua level, dan deteksi ContentProtection.
+ * Pure MPEG-DASH parser (ISO/IEC 23009-1): no external DOMParser, so it
+ * can be tested in Node and still run in the offscreen document.
+ * Handles SegmentList, SegmentTemplate (+ SegmentTimeline), SegmentBase (sidx),
+ * BaseURL inheritance at all levels, and ContentProtection detection.
  */
 import { resolveUrl } from './url.js';
 
@@ -17,7 +17,7 @@ export function decodeEntities(s) {
   });
 }
 
-/** Parser XML kecil dan toleran, cukup untuk MPD. */
+/** Small, tolerant XML parser, sufficient for MPD. */
 export function parseXml(text) {
   const s = String(text);
   const root = { name: '#doc', attrs: {}, children: [], text: '' };
@@ -26,14 +26,14 @@ export function parseXml(text) {
   let m;
   while ((m = re.exec(s))) {
     if (m[1] !== undefined) { stack[stack.length - 1].text += m[1]; continue; }
-    if (m[2]) { // tutup
+    if (m[2]) { // close
       const name = m[2];
       for (let i = stack.length - 1; i > 0; i--) {
         if (stack[i].name === name || stack[i].name.endsWith(':' + name)) { stack.length = i; break; }
       }
       continue;
     }
-    if (m[3]) { // buka
+    if (m[3]) { // open
       const name = m[3];
       const attrs = {};
       const are = /([\w:.-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
@@ -70,7 +70,7 @@ const DRM_UUIDS = [
   'edef8ba9-79d6-4ace-a3c8-27dcd51d21ed', // Widevine
   '9a04f079-9840-4286-ab92-e65be0885f95', // PlayReady
   '94ce86fb-07ff-4f43-adb8-93d2fa968ca2', // FairPlay
-  'e2719d58-a985-b3c9-781a-b030af78d30e', // ClearKey (dianggap aman)
+  'e2719d58-a985-b3c9-781a-b030af78d30e', // ClearKey (considered safe)
 ];
 
 function expandTemplate(tpl, ctx, num, time) {
@@ -83,7 +83,7 @@ function expandTemplate(tpl, ctx, num, time) {
     .replace(/\u0000/g, '$');
 }
 
-/** Perluas daftar segmen satu Representation menjadi array {uri, range, duration, number, time}. */
+/** Expand one Representation's segment list into an array {uri, range, duration, number, time}. */
 export function expandSegments(rep, periodDuration) {
   const info = rep.segmentInfo;
   if (!info) return { kind: 'none', segments: [] };

@@ -1,6 +1,6 @@
 /*
- * Analisis kandidat -> item + inventaris (URL teks saja, tanpa byte media).
- * Berjalan di offscreen document: fetch manifest, parse, gate, pasang, peringkat.
+ * Candidate analysis -> items + inventory (text URLs only, no media bytes).
+ * Runs in the offscreen document: fetch manifest, parse, gate, pair, rank.
  */
 import { canonKey, manifestKind, extFromUrl, resolveUrl } from '../engine/url.js';
 import { parseM3u8 } from '../engine/m3u8.js';
@@ -71,7 +71,7 @@ export async function analyze({ candidates, page, prefs }) {
   for (const c of net) {
     const kind = manifestKind(c.url, c.contentType || c.meta?.contentType);
     if (kind || c.kind === 'manifest') addManifest(c.url, c.contentType || c.meta?.contentType);
-    else if (SEG_EXT.test(c.url)) { /* segmen digulung ke manifest induk; tidak pernah jadi entri sendiri */ }
+    else if (SEG_EXT.test(c.url)) { /* segments are rolled up into the parent manifest; never their own entry */ }
     else if (IMAGE_EXT.test(c.url) || /^image\//.test(c.contentType || c.meta?.contentType || '')) addImage(c.url, { contentLength: c.contentLength || c.meta?.contentLength });
     else if (/\.(mp4|m4v|webm|mkv|mov|mp3|aac|opus|ogg|flac|wav|m4a)(?=$|[?#])/i.test(c.url) || /^(video|audio)\//.test(c.contentType || c.meta?.contentType || '')) addMedia(c.url, { contentLength: c.contentLength || c.meta?.contentLength });
   }
@@ -79,7 +79,7 @@ export async function analyze({ candidates, page, prefs }) {
     if (c.kind === 'image') addImage(c.url, c.meta || {});
     else if (c.kind === 'canvas' || c.kind === 'data') addImage(c.url, c.meta || {});
     else if (c.kind === 'video' || c.kind === 'audio') {
-      if (c.meta?.blob) continue; // blob: adalah sinyal mencari manifest, bukan target unduhan
+      if (c.meta?.blob) continue; // blob: is a signal to look for a manifest, not a download target
       addMedia(c.url, c.meta || {});
     }
   }
@@ -115,7 +115,7 @@ export async function analyze({ candidates, page, prefs }) {
       } else {
         playlists.set(canonKey(man.url), parsed);
       }
-      // kunci AES-128: bukti bisa diambil sebelum menawarkan READY
+      // AES-128 keys: proof they can be fetched before offering READY
       const keyResults = new Map();
       const keyUrls = [];
       for (const p of [...playlists.values(), ...audioGroups.values()]) {
@@ -150,7 +150,7 @@ export async function analyze({ candidates, page, prefs }) {
       if (!mpd.ok) { items.push(streamItem(man.url, 'dash', page, [], { status: 'NOT_READY', notReadyReason: 'manifest_parse_error' }, index++)); continue; }
       mpd.manifestUrl = man.url;
       const sidxMap = new Map();
-      // ekspansi segmen per representation (cap), termasuk sidx untuk SegmentBase
+      // segment expansion per representation (capped), including sidx for SegmentBase
       const jobs = [];
       for (const period of mpd.periods) {
         for (const as of period.adaptationSets) {
@@ -184,13 +184,13 @@ export async function analyze({ candidates, page, prefs }) {
     }
   }
 
-  /* ---------- YouTube (fitur inti di dalam ekstensi) ---------- */
+  /* ---------- YouTube (core feature inside the extension) ---------- */
   if (yt?.formats?.length) {
     const { item, invs } = youtubeItem(yt.formats, page, prefs, index++);
     if (item) { items.push(item); Object.assign(inventories, invs); }
   }
 
-  /* ---------- progresif ---------- */
+  /* ---------- progressive ---------- */
   const probes = cap(mediaUrls, 8);
   const probeResults = await pmap(probes, 4, async (m) => ({ m, probe: await cachedProbe(m.url) }));
   for (const r of probeResults) {
@@ -231,7 +231,7 @@ export async function analyze({ candidates, page, prefs }) {
     items.push(item);
   }
 
-  /* ---------- gambar ---------- */
+  /* ---------- images ---------- */
   const imageList = cap(images, 80);
   const imgEntries = [];
   for (const img of imageList) {
@@ -270,7 +270,7 @@ export async function analyze({ candidates, page, prefs }) {
   return { items, inventories };
 }
 
-/* ---------- pembantu ---------- */
+/* ---------- helpers ---------- */
 function hostLabel(url) {
   try { return new URL(url).hostname; } catch { return 'media'; }
 }
@@ -364,7 +364,7 @@ function imageItem(img, page, index, { size = null, kind = null } = {}) {
   };
 }
 
-/* ---------- inventaris (daftar URL segmen sebagai teks) ---------- */
+/* ---------- inventory (segment URL list as text) ---------- */
 function hlsInventory(v, playlists, audioGroups, masterParsed, keyResults) {
   const p = playlists.get(v.playlistKey);
   const segs = (p?.media?.segments || []).map((s) => ({
@@ -560,3 +560,4 @@ async function cachedImageInfo(url) {
   if (out) imageInfoCache.set(url, out);
   return out;
 }
+

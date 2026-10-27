@@ -1,12 +1,12 @@
 /*
- * Pengambil byte: manifest, segmen (konkurensi terbatas + retry + backoff), probe progresif.
- * Fetch konteks ekstensi bebas CORS; cookie sesi hanya ditempel bila diminta job.
+ * Byte fetcher: manifests, segments (bounded concurrency + retries + backoff), progressive probes.
+ * Extension-context fetch is CORS-free; the session cookie is only attached when the job asks for it.
  */
 import { sniff, detectExt } from '../engine/sniff.js';
 
 export class HttpError extends Error {
   constructor(status, url, extra = {}) {
-    super(`HTTP ${status} untuk ${url}`);
+    super(`HTTP ${status} for ${url}`);
     this.status = status;
     this.url = url;
     Object.assign(this, extra);
@@ -124,8 +124,8 @@ function parseTotal(cr) {
 const BACKOFF = [1000, 3000, 9000];
 
 /**
- * Ambil segmen: fetch boleh paralel terbatas, penulisan WAJIB berurutan.
- * onSegment(index, bytes) dipanggil urut 0..n-1.
+ * Fetch segments: fetching may be bounded-parallel, writing MUST be sequential.
+ * onSegment(index, bytes) is called in order 0..n-1.
  */
 export async function fetchSegments(inventory, {
   concurrency = 5,
@@ -134,7 +134,7 @@ export async function fetchSegments(inventory, {
   signal = null,
   onProgress = () => {},
   onPhase = () => {},
-  refresh = null, // () => Promise<inventory|null> untuk URL segar sebelum retry terakhir
+  refresh = null, // () => Promise<inventory|null> for fresh URLs before the last retry
   shouldPause = () => false,
   resumeFrom = 0,
   writeSegment = async () => {},
@@ -154,7 +154,7 @@ export async function fetchSegments(inventory, {
 
   const report = (force = false) => {
     const now = Date.now();
-    if (!force && now - lastProgress < 250) return; // maks ~4 update/detik
+    if (!force && now - lastProgress < 250) return; // max ~4 updates/second
     lastProgress = now;
     onProgress({ segIndex: nextWrite, segCount: total, bytes: bytesReceived });
   };
@@ -172,14 +172,14 @@ export async function fetchSegments(inventory, {
             if (fresh && fresh.segments[index]) {
               current = fresh;
               seg = current.segments[index];
-              continue; // coba lagi dengan URL segar
+              continue; // retry with fresh URLs
             }
           }
           throw new HttpError(res.status, seg.url);
         }
         const expected = seg.range ? seg.range[1] - seg.range[0] + 1 : res.contentLength;
         if (expected != null && res.bytes.length !== expected && res.status === 200 && !seg.range) {
-          // panjang tidak cocok dengan Content-Length: coba sekali lagi
+          // length does not match Content-Length: try once more
           if (attempt < retries) { lastErr = new Error('length_mismatch'); continue; }
         }
         const sn = sniff(res.bytes);

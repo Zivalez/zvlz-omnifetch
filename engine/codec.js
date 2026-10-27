@@ -1,4 +1,4 @@
-/* Keluarga codec, label manusiawi, dan matriks kontainer keluaran (Bab 6 & 8). */
+/* Codec families, human-readable labels, and output container matrix (Chapters 6 and 8). */
 
 export function codecFamily(codecStr) {
   const c = String(codecStr || '').toLowerCase();
@@ -22,7 +22,7 @@ export function codecFamily(codecStr) {
 export const CODEC_LABEL = {
   avc: 'H.264', hevc: 'HEVC', vp9: 'VP9', vp8: 'VP8', av1: 'AV1',
   aac: 'AAC', opus: 'Opus', mp3: 'MP3', ac3: 'AC-3', eac3: 'E-AC-3',
-  flac: 'FLAC', vorbis: 'Vorbis', unknown: 'codec tak dikenal', subtitle: 'subtitle',
+  flac: 'FLAC', vorbis: 'Vorbis', unknown: 'Unknown codec', subtitle: 'subtitle',
 };
 
 export function codecLabel(videoCodec, audioCodec) {
@@ -31,7 +31,7 @@ export function codecLabel(videoCodec, audioCodec) {
   const a = codecFamily(audioCodec);
   if (videoCodec && v !== 'unknown') parts.push(CODEC_LABEL[v]);
   if (audioCodec && a !== 'unknown') parts.push(CODEC_LABEL[a]);
-  if (!parts.length) return videoCodec || audioCodec || 'codec tak dikenal';
+  if (!parts.length) return videoCodec || audioCodec || 'Unknown codec';
   return parts.join(' + ');
 }
 
@@ -43,21 +43,21 @@ export function isAudioCodec(codecStr) {
 }
 
 /**
- * Kontainer keluaran untuk jalur copy (semantik -c copy).
- * Mengikuti matriks Bab 8: MP4 untuk H.264/HEVC + AAC; WebM untuk VP9/AV1 + Opus.
- * Mengembalikan null bila tidak ada kontainer yang bisa menampung tanpa transcode.
+ * Output container for the copy path (-c copy semantics).
+ * Follows the Chapter 8 matrix: MP4 for H.264/HEVC + AAC; WebM for VP9/AV1 + Opus.
+ * Returns null when no container can hold the tracks without transcoding.
  */
 export function outputContainerFor(videoCodec, audioCodec) {
   const v = videoCodec ? codecFamily(videoCodec) : null;
   const a = audioCodec ? codecFamily(audioCodec) : null;
   if (v && ['vp9', 'vp8', 'av1'].includes(v)) {
     if (!a || ['opus', 'vorbis'].includes(a)) return 'webm';
-    if (a === 'aac') return 'mp4'; // AV1/VP9 + AAC sah di MP4 pada player modern
+    if (a === 'aac') return 'mp4'; // AV1/VP9 + AAC is valid in MP4 in modern players
     return null;
   }
   if (v && ['avc', 'hevc'].includes(v)) {
     if (!a || ['aac', 'mp3', 'ac3', 'eac3', 'flac'].includes(a)) return 'mp4';
-    if (a === 'opus') return 'mkv'; // AAC-family + Opus tidak standar di MP4/WebM
+    if (a === 'opus') return 'mkv'; // AAC-family + Opus is not standard in MP4/WebM
     return null;
   }
   if (!v && a) return audioContainerFor(audioCodec);
@@ -65,7 +65,7 @@ export function outputContainerFor(videoCodec, audioCodec) {
 }
 
 export function audioContainerFor(audioCodec) {
-  const a = codecFamily(audioCodec);
+  const a = audioCodec ? codecFamily(audioCodec) : null;
   if (a === 'aac') return 'm4a';
   if (a === 'opus') return 'opus';
   if (a === 'mp3') return 'mp3';
@@ -80,7 +80,7 @@ export const CONTAINER_EXT = {
   mp3: 'mp3', flac: 'flac', ogg: 'ogg', ac3: 'ac3', ts: 'ts',
 };
 
-/** Codec efisien hanya menang pada resolusi sama bila kontainer keluaran mendukungnya. */
+/** An efficient codec only wins at the same resolution when the output container supports it. */
 export function efficiencyRank(family) {
   return { av1: 3, vp9: 2, hevc: 2.5, avc: 1, vp8: 0.5, unknown: 0 }[family] ?? 0;
 }

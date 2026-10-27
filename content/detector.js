@@ -1,6 +1,6 @@
 /*
- * Lapis 2 (sensor DOM) + jembatan lapis 3 (hook MAIN world).
- * ISOLATED world. Berhenti memindai saat tab tidak terlihat; penjaga kedua ada di worker.
+ * Layer 2 (DOM sensor) + bridge for layer 3 (MAIN world hook).
+ * ISOLATED world. Stops scanning when the tab is not visible; the second guard lives in the worker.
  */
 (() => {
   if (window.__mdDetector) return;
@@ -53,7 +53,7 @@
 
   function scan() {
     const items = [];
-    // video & audio: currentSrc adalah sumber yang benar-benar dipilih browser
+    // video and audio: currentSrc is the source actually chosen by the browser
     const hint = (el) => {
       const scope = el.closest('figure, article, section, li, div');
       const t = scope && scope.querySelector('h1, h2, h3, h4, figcaption, [itemprop="name"]');
@@ -76,7 +76,7 @@
         },
       });
     }
-    // gambar: satu entri per elemen, rendisi srcset dikelompokkan
+    // images: one entry per element, srcset renditions grouped
     const imgs = document.querySelectorAll('img, picture source');
     for (const el of imgs) {
       const src = el.currentSrc || el.src || el.dataset.src || el.getAttribute('data-src') || null;
@@ -99,7 +99,7 @@
       const src = el.getAttribute('data-src');
       if (src) push(items, { url: new URL(src, location.href).href, kind: 'image', meta: { renditions: parseSrcset(el.getAttribute('data-srcset'), location.href), width: null, height: null } });
     }
-    // CSS background-image di sekitar viewport (terbatas & di-cache per elemen)
+    // CSS background-image around the viewport (limited and cached per element)
     let checked = 0;
     for (const el of document.querySelectorAll('figure, div, section, header, article, a, span')) {
       if (checked++ > 250) break;
@@ -130,7 +130,7 @@
     if (!flushTimer) flushTimer = setTimeout(send, 300);
   }
 
-  // jeda saat tab tidak terlihat (aturan cakupan)
+  // pause when the tab is not visible (scope rule)
   document.addEventListener('visibilitychange', () => {
     visible = document.visibilityState === 'visible';
     if (visible) queueScan();
@@ -144,7 +144,7 @@
   });
   mo.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['src', 'srcset', 'data-src', 'data-srcset', 'poster'] });
 
-  // jembatan MAIN world -> worker (hanya metadata, tidak pernah body respons)
+  // MAIN world -> worker bridge (metadata only, never response bodies)
   let hookBuf = [];
   let hookTimer = null;
   window.addEventListener('message', (e) => {

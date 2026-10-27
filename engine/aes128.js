@@ -1,4 +1,4 @@
-/* Dekripsi HLS AES-128-CBC (METHOD=AES-128). IV default = nomor urut media segmen. */
+/* HLS AES-128-CBC decryption (METHOD=AES-128). Default IV = media segment sequence number. */
 
 export function defaultIv(sequenceNumber) {
   const iv = new Uint8Array(16);

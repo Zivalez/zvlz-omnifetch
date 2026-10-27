@@ -1,11 +1,11 @@
 /*
- * Pohon keputusan perakitan (Bab 8), semuanya di dalam browser:
- * Q1 progresif  -> salin apa adanya
- * Q2 fMP4       -> konkatenasi init + segmen (lossless, tanpa ffmpeg)
- * Q3 HLS TS     -> transmux ke MP4 (codec utuh) lewat MediaBunny
- * Q4 trek pisah -> mux tanpa re-encode lewat dua Conversion composable
- * Q5 transcode  -> MediaBunny/WebCodecs dulu; ffmpeg.wasm adalah tier terpisah yang
- *                  tidak dibundel build ini -> alasan jujur codec_unsupported
+ * Assembly decision tree (Chapter 8), all inside the browser:
+ * Q1 progressive -> copy as-is
+ * Q2 fMP4       -> concatenate init + segments (lossless, no ffmpeg)
+ * Q3 HLS TS     -> transmux to MP4 (codecs intact) via MediaBunny
+ * Q4 split tracks -> mux without re-encoding via two composable Conversions
+ * Q5 transcode  -> MediaBunny/WebCodecs first; ffmpeg.wasm is a separate tier that is
+ *                  not bundled in this build -> honest codec_unsupported reason
  */
 import { mp4Info } from '../engine/mp4box.js';
 
@@ -37,7 +37,7 @@ async function runConversion(input, output, opts = {}) {
   return conv;
 }
 
-/** Q3: MPEG-TS -> MP4 (transmux, codec utuh). */
+/** Q3: MPEG-TS -> MP4 (transmux, codecs intact). */
 export async function transmuxTs(tsBlob) {
   const M = MB();
   const input = new M.Input({ source: new M.BlobSource(tsBlob), formats: [M.MPEG_TS] });
@@ -46,7 +46,7 @@ export async function transmuxTs(tsBlob) {
   return new Blob([output.target.buffer], { type: 'video/mp4' });
 }
 
-/** Q4: dua trek terpisah (video + audio) -> satu kontainer, tanpa re-encode. */
+/** Q4: two separate tracks (video + audio) -> one container, without re-encoding. */
 export async function muxTracks(videoBlob, audioBlob, container) {
   const M = MB();
   const vin = new M.Input({ source: new M.BlobSource(videoBlob), formats: M.ALL_FORMATS });
@@ -62,7 +62,7 @@ export async function muxTracks(videoBlob, audioBlob, container) {
   return new Blob([buf], { type });
 }
 
-/** Copy satu trek (audio-only / video-only) ke kontainer tujuan. */
+/** Copy a single track (audio-only / video-only) to the target container. */
 export async function copyTrack(blob, container, { keep = 'audio' } = {}) {
   const M = MB();
   const input = new M.Input({ source: new M.BlobSource(blob), formats: M.ALL_FORMATS });
@@ -73,7 +73,7 @@ export async function copyTrack(blob, container, { keep = 'audio' } = {}) {
   return new Blob([output.target.buffer], { type });
 }
 
-/** Verifikasi pasca-perakitan (Bab 7): kepala file + durasi dalam toleransi satu segmen. */
+/** Post-assembly verification (Chapter 7): file header + duration within one segment of tolerance. */
 export async function verifyBlob(blob, { duration = null, toleranceSec = 8, container = 'mp4' } = {}) {
   try {
     const M=MB();
@@ -81,12 +81,12 @@ export async function verifyBlob(blob, { duration = null, toleranceSec = 8, cont
     const tracks=await input.getTracks();
     const actual=await input.computeDuration();
     if(!tracks.length || !Number.isFinite(actual) || actual <= 0) return {ok:false,reason:'assembly_unverified'};
-    if(duration && Math.abs(actual-duration)>toleranceSec) return {ok:false,reason:'assembly_unverified',detail:'Durasi keluaran tidak cocok dengan manifest.'};
+    if(duration && Math.abs(actual-duration)>toleranceSec) return {ok:false,reason:'assembly_unverified',detail:'Output duration does not match the manifest.'};
     return {ok:true,duration:actual};
   } catch {return {ok:false,reason:'assembly_unverified'};}
 }
 
-/** Penjaga memori/ukuran: batas jujur extension-only (Bab 13). */
+/** Memory/size guard: honest extension-only limit (Chapter 13). */
 export function checkLimits(totalBytes, maxBytes) {
   const deviceMemoryGb = globalThis.navigator?.deviceMemory || null;
   if (maxBytes && totalBytes > maxBytes) return { ok: false, reason: 'too_large' };

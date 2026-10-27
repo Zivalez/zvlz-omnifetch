@@ -1,6 +1,6 @@
 /*
- * Parser HLS (RFC 8216) murni, tanpa dependensi.
- * Multivariant (master) dan media playlist dipisahkan tegas; keduanya tidak boleh tertukar.
+ * Pure HLS parser (RFC 8216), no dependencies.
+ * Multivariant (master) and media playlists are kept strictly separate; they must not be mixed up.
  */
 import { resolveUrl, canonKey } from './url.js';
 
@@ -62,7 +62,7 @@ export function parseM3u8(text, baseUrl) {
   };
   let isMaster = false;
 
-  let pending = null; // atribut untuk URI berikutnya
+  let pending = null; // attributes for the next URI
   let curKey = null;
   let curInit = null;
   let curByterange = null;
@@ -206,7 +206,7 @@ export function parseM3u8(text, baseUrl) {
   };
 }
 
-/** Playlist media dianggap VOD hanya bila ada ENDLIST (bukti), bukan sekadar PLAYLIST-TYPE. */
+/** A media playlist counts as VOD only when it has ENDLIST (proof), not merely PLAYLIST-TYPE. */
 export function isVod(parsedMediaPlaylist) {
   return parsedMediaPlaylist.ok && !parsedMediaPlaylist.isMaster && parsedMediaPlaylist.media.endlist === true;
 }
