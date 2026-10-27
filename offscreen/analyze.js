@@ -191,7 +191,10 @@ export async function analyze({ candidates, page, prefs }) {
   }
 
   /* ---------- progressive ---------- */
-  const probes = cap(mediaUrls, 8);
+  // Progressive items were silently cut at 8, so a page with more files
+  // looked stuck at 8 items. 40 keeps analysis bounded (cheap 64 KB peeks,
+  // 4 workers) while matching the scale images already allow (80).
+  const probes = cap(mediaUrls, 40);
   const probeResults = await pmap(probes, 4, async (m) => ({ m, probe: await cachedProbe(m.url) }));
   for (const r of probeResults) {
     if (!r || r.__err || !r.probe) continue;
