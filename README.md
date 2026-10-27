@@ -17,10 +17,22 @@
 
 ## Install
 
-1. Download or clone this repository.
+<p align="center">
+  <a href="https://github.com/Zivalez/zvlz-omnifetch/archive/refs/heads/main.zip">
+    <img src="https://img.shields.io/badge/Download-ZVLZ_OmniFetch-4285F4?style=for-the-badge" alt="Download ZVLZ OmniFetch">
+  </a>
+</p>
+
+1. Download the ZIP above and unzip it, or clone the repository:
+
+   ```
+   git clone https://github.com/Zivalez/zvlz-omnifetch.git
+   ```
+
+   The ZIP above is the same file as Code > Download ZIP in this repository.
 2. Open `chrome://extensions` in Chrome 120 or later.
 3. Turn on **Developer mode**.
-4. Choose **Load unpacked**, then select the folder that contains `manifest.json`.
+4. Choose **Load unpacked**, then select the folder that contains `manifest.json`. If you used the ZIP, that folder is `zvlz-omnifetch-main`.
 5. Reload the page, play the media, then open the extension.
 
 ## How to use
