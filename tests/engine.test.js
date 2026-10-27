@@ -1,0 +1,18 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {parseM3u8,parseAttrs} from '../engine/m3u8.js';
+import {parseMpd,expandSegments} from '../engine/mpd.js';
+import {gateHls,resolutionLabel} from '../engine/gate.js';
+import {sanitizeFilename} from '../engine/naming.js';
+import {buildZip,crc32} from '../engine/zip.js';
+import {defaultIv} from '../engine/aes128.js';
+const url='https://example.com/master.m3u8';
+test('HLS master audio rendition URI stays on EXT-X-MEDIA',()=>{const p=parseM3u8('#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="a",NAME="ID",URI="a.m3u8",DEFAULT=YES\n#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=1280x720,AUDIO="a",CODECS="avc1.42E01E,mp4a.40.2"\nv.m3u8',url);assert.equal(p.master.media[0].uri,'https://example.com/a.m3u8');assert.equal(p.master.variants.length,1);assert.equal(p.master.variants[0].resolution[1],720);});
+test('live never READY',()=>{const p=parseM3u8('#EXTM3U\n#EXTINF:6,\na.ts',url);const g=gateHls({playlists:new Map([[url,p]]),audioGroups:new Map(),mediaPlaylistUrl:url});assert.equal(g.eligibleCount,0);assert.ok(g.variants[0].reasons.includes('live_stream'));});
+test('DRM never READY',()=>{const p=parseM3u8('#EXTM3U\n#EXT-X-KEY:METHOD=SAMPLE-AES,URI="skd://x"\n#EXTINF:6,\na.ts\n#EXT-X-ENDLIST',url);const g=gateHls({playlists:new Map([[url,p]]),audioGroups:new Map(),mediaPlaylistUrl:url});assert.equal(g.eligibleCount,0);assert.ok(g.variants[0].reasons.includes('drm_protected'));});
+test('DASH timeline repeat 299 means 300 segments',()=>{const p=parseMpd('<MPD type="static" mediaPresentationDuration="PT600S"><Period><AdaptationSet mimeType="video/mp4"><SegmentTemplate media="$Number$.m4s" initialization="init.mp4" timescale="1"><SegmentTimeline><S t="0" d="2" r="299"/></SegmentTimeline></SegmentTemplate><Representation id="v" bandwidth="100000"/></AdaptationSet></Period></MPD>','https://example.com/a.mpd');const r=p.periods[0].adaptationSets[0].representations[0];const x=expandSegments(r,600);assert.equal(x.segments.length,300);assert.equal(x.segments[299].uri,'https://example.com/300.m4s');});
+test('HLS byterange inventory offsets',()=>{const p=parseM3u8('#EXTM3U\n#EXTINF:2,\n#EXT-X-BYTERANGE:100@20\na.mp4\n#EXTINF:2,\n#EXT-X-BYTERANGE:50\na.mp4\n#EXT-X-ENDLIST',url);assert.equal(p.media.segments[1].byterange.offset,120);});
+test('resolution labels',()=>{assert.equal(resolutionLabel(1920,1080),'1080p');assert.equal(resolutionLabel(1280,720),'720p');});
+test('safe filenames',()=>{assert.equal(sanitizeFilename('../../bad:name.mp4'),'badname.mp4');});
+test('CRC and ZIP headers',()=>{assert.equal(crc32(new TextEncoder().encode('123456789')),0xcbf43926);const z=buildZip([{name:'a.txt',bytes:new Uint8Array([1,2])}]);assert.equal(new DataView(z.buffer).getUint32(0,true),0x04034b50);});
+test('AES default IV is media sequence',()=>{assert.equal(new DataView(defaultIv(512).buffer).getUint32(12),512);});
+test('attributes with quoted comma codec list',()=>{assert.equal(parseAttrs('BANDWIDTH=99,CODECS="avc1,mp4a"').CODECS,'avc1,mp4a');});
