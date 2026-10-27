@@ -9,7 +9,7 @@ import {
 } from './store.js';
 import { installWebRequest } from './webrequest.js';
 import { ensureOffscreen, offscreen, closeOffscreenIfIdle } from './offscreen-client.js';
-import { startJob, controlJob, progressFromOffscreen, failJob, completeJob, reconcileAfterRestart, ensureKeepalive, applyHeaderRule, releaseHeaderRule } from './jobs.js';
+import { startJob, controlJob, progressFromOffscreen, failJob, completeJob, directDownload, reconcileAfterRestart, ensureKeepalive, applyHeaderRule, releaseHeaderRule } from './jobs.js';
 import { canonKey, hostOf, originOf } from '../engine/url.js';
 import { applyTemplate } from '../engine/naming.js';
 import { hashId } from '../engine/gate.js';
@@ -236,6 +236,10 @@ async function handle(msg, sender) {
       return { ok: true };
     case 'job:done':
       await completeJob(msg.jobId, { blobUrl: msg.blobUrl, size: msg.size, ext: msg.ext });
+      broadcast();
+      return { ok: true };
+    case 'job:direct':
+      await directDownload(msg.jobId, { url: msg.url, size: msg.size, ext: msg.ext });
       broadcast();
       return { ok: true };
     case 'job:fail':

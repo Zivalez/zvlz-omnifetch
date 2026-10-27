@@ -153,17 +153,61 @@ export async function completeJob(jobId, { blobUrl, size, ext }) {
     return;
   }
   await setJob({ id: jobId, downloadId, status: 'running' });
-  // revoke the object URL only after the download has actually started
+  // Revoke the object URL and release the staging files only after the
+  // download has actually finished or failed. Releasing earlier can delete
+  // the OPFS file backing a large blob while Chrome is still reading it.
   const listener = (delta) => {
     if (delta.id !== downloadId) return;
     if (delta.state?.current === 'complete' || delta.state?.current === 'interrupted') {
       offscreen({ t: 'revoke', blobUrl }).catch(() => {});
+      offscreen({ t: 'job:release', jobId }).catch(() => {});
+      chrome.downloads.onChanged.removeListener(listener);
     }
+    if (delta.state?.current === 'complete') {
+      finishSaved(jobId, size);
+    }
+    if (delta.state?.current === 'interrupted') {
+      failJob(jobId, 'failed_midway', delta.error?.current || 'interrupted');
+    }
+  };
+  chrome.downloads.onChanged.addListener(listener);
+}
+
+/**
+ * Download a single file directly from its original URL, with no blob and
+ * no staging in between. Chrome streams the server response straight to
+ * disk, exactly like a normal browser download. Used for large passthrough
+ * files that would otherwise spill to OPFS and be read back as a blob.
+ */
+export async function directDownload(jobId, { url, size, ext }) {
+  const jobs = await getJobs();
+  const job = jobs[jobId];
+  if (!job) return;
+  const prefs = await getPrefs();
+  const fileName = reconcileExt(job.fileName, ext);
+  await setJob({ id: jobId, phase: 'saving', status: 'saving', fileName });
+  job.fileName = fileName;
+  let downloadId = null;
+  try {
+    downloadId = await chrome.downloads.download({
+      url,
+      filename: fileName,
+      saveAs: false,
+      conflictAction: prefs.conflictAction === 'overwrite' ? 'overwrite' : 'uniquify',
+    });
+  } catch (e) {
+    await failJob(jobId, 'segment_unavailable', String(e?.message || e));
+    return;
+  }
+  await setJob({ id: jobId, downloadId, status: 'running' });
+  const listener = (delta) => {
+    if (delta.id !== downloadId) return;
     if (delta.state?.current === 'complete') {
       chrome.downloads.onChanged.removeListener(listener);
       finishSaved(jobId, size);
     }
     if (delta.state?.current === 'interrupted') {
+      chrome.downloads.onChanged.removeListener(listener);
       failJob(jobId, 'failed_midway', delta.error?.current || 'interrupted');
     }
   };

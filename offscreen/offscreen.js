@@ -4,7 +4,7 @@
  * Progress is reported straight to the UI via the worker; the record job lives in storage.session.
  */
 import { analyze } from './analyze.js';
-import { fetchSegments, fetchRaw, probeProgressive, sleep } from './fetcher.js';
+import { fetchSegments, fetchRaw, probeProgressive, peek, sleep } from './fetcher.js';
 import { TrackStaging, clearAllStaging } from './staging.js';
 import { transmuxTs, muxTracks, copyTrack, verifyBlob, checkLimits, assemblySupported } from './assemble.js';
 import { startRecording, stopRecording, recordingState } from './recorder.js';
@@ -48,7 +48,19 @@ async function route(msg) {
       if (msg.action === 'cancel') {
         job.canceled = true;
         job.abort?.abort();
-        for (const s of job.stagings || []) await s.clear();
+        // Do not clear stagings after job:done was sent. The blob may still
+        // be backed by an OPFS file that Chrome is reading for the download.
+        if (!job.doneSent) {
+          for (const s of job.stagings || []) await s.clear();
+        }
+      }
+      return { ok: true };
+    }
+    case 'job:release': {
+      const job = jobs.get(msg.jobId);
+      if (job) {
+        for (const s of job.stagings || []) await s.clear().catch(() => {});
+        jobs.delete(msg.jobId);
       }
       return { ok: true };
     }
@@ -123,7 +135,7 @@ function sanitize(s) {
 async function runJob(msg) {
   const { jobId, prefs } = msg;
   let inv = structuredClone(msg.inv);
-  const job = { status: 'running', paused: false, canceled: false, abort: new AbortController(), stagings: [] };
+  const job = { status: 'running', paused: false, canceled: false, abort: new AbortController(), stagings: [], doneSent: false };
   jobs.set(jobId, job);
   const headers = {};
   if (msg.cookieHeader) headers.Cookie = msg.cookieHeader;
@@ -148,6 +160,25 @@ async function runJob(msg) {
     const est = estimateBytes(inv);
     const limits = checkLimits(est, prefs.maxAssembleBytes);
     if (!limits.ok) throw Object.assign(new Error('exceeds browser assembly limit'), { reason: limits.reason });
+
+    /* 3b. Direct download for large single files. A passthrough file needs
+     * no assembly, so fetching the whole file into a blob only adds a
+     * failure point. Above the 96 MB staging limit the blob would be backed
+     * by an OPFS file, so skip the blob entirely and let Chrome download
+     * the original URL straight to disk. Smaller files keep the old path,
+     * which preserves the full-file format and truncation checks. */
+    if (inv.url && !inv.video && !inv.audio && inv.assembly === 'passthrough' && (inv.totalBytes || est) > 96e6) {
+      const peeked = await peek(inv.url, { headers, max: 65536, timeoutMs: 30000 });
+      if (!peeked.ok) throw Object.assign(new Error(`HTTP ${peeked.status}`), { reason: peeked.status === 403 || peeked.status === 401 || peeked.status === 410 ? 'auth_expired' : 'segment_unavailable' });
+      const detected = peeked.bytes.length >= 4 ? sniff(peeked.bytes) : { kind: 'unknown' };
+      if (['html', 'json'].includes(detected.kind) || (detected.kind === 'unknown' && !/^(image|audio|video)\//.test(peeked.contentType || '') && !/svg/.test(peeked.contentType || ''))) throw Object.assign(new Error('Unrecognized file format'), { reason: 'codec_unsupported' });
+      const total = peeked.total || inv.totalBytes || est;
+      if (!checkLimits(total, prefs.maxAssembleBytes).ok) throw Object.assign(new Error('exceeds browser assembly limit'), { reason: 'too_large' });
+      const directExt = detectExt({ bytes: peeked.bytes.subarray(0, 4096), contentType: peeked.contentType, urlExt: inv.ext, audio: /^(m4a|mp3|aac|ogg|flac|wav|opus)$/.test(inv.ext || '') }) || inv.ext || null;
+      progress('downloading', 1, 1, 0, total);
+      send({ t: 'job:direct', jobId, url: inv.url, size: total, ext: directExt });
+      return;
+    }
 
     /* 4. fetch segments in order (bounded-parallel fetch, sequential writes) */
     const vStaging = inv.video ? new TrackStaging({ memoryLimit: 96e6, name: 'v' }) : null;
@@ -242,6 +273,7 @@ async function runJob(msg) {
     if (!ver.ok) throw Object.assign(new Error(ver.detail || 'assembly verification failed'), { reason: ver.reason || 'assembly_unverified' });
 
     const blobUrl = URL.createObjectURL(finalBlob);
+    job.doneSent = true;
     send({ t: 'job:done', jobId, blobUrl, size: finalBlob.size, ext: inv._ext || null });
   } catch (e) {
     if (job.canceled || String(e?.message) === 'canceled') {
@@ -250,8 +282,13 @@ async function runJob(msg) {
       send({ t: 'job:fail', jobId, reason: e?.reason || 'segment_unavailable', detail: String(e?.message || e).slice(0, 200) });
     }
   } finally {
-    for (const s of job.stagings) { if (s.closed !== true) await s.clear().catch(() => {}); }
-    jobs.delete(jobId);
+    // Keep stagings after job:done. The service worker releases them with
+    // job:release once the Chrome download has finished or failed, so a
+    // blob backed by an OPFS file is never deleted while Chrome reads it.
+    if (!job.doneSent) {
+      for (const s of job.stagings) { if (s.closed !== true) await s.clear().catch(() => {}); }
+      jobs.delete(jobId);
+    }
   }
 }
 
