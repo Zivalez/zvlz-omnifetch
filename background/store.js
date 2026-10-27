@@ -1,4 +1,4 @@
-/* Penyimpanan: cache per tab (session, URL+metadata saja), prefs & riwayat (local). */
+/* Storage: per-tab cache (session, URLs plus metadata only), prefs and history (local). */
 import { DEFAULT_TEMPLATE } from '../engine/naming.js';
 
 export const PREF_DEFAULTS = {
